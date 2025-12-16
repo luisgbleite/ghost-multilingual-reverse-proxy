@@ -11,9 +11,13 @@ http {
         default "nosniff";
     }
 
+    resolver 8.8.8.8 8.8.4.4 valid=1s ipv6=off;
+
+    # -----------------------------
+    # EN: blog.awtom.io
+    # -----------------------------
     server {
         listen ${PORT};
-
         server_name ${SERVER_NAME};
 
         port_in_redirect off;
@@ -21,7 +25,68 @@ http {
 
         add_header X-Content-Type-Options $header_content_type_options;
 
-        resolver 8.8.8.8 8.8.4.4 valid=1s ipv6=off;
+        location = /health {
+            add_header 'Access-Control-Allow-Origin' '*' always;
+            add_header 'Content-Type' 'text/plain' always;
+            return 200 'OK';
+        }
+
+        # Redirect old PT path to the new PT domain
+        location = /pt {
+            return 301 https://blog.awtom.com.br/;
+        }
+        location ^~ /pt/ {
+            return 301 https://blog.awtom.com.br$request_uri;
+        }
+
+        location ~ /.ghost/activitypub/* {
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header Host $http_host;
+            proxy_ssl_server_name on;
+            proxy_pass https://ap.ghost.org;
+        }
+
+        location ~ /.well-known/(webfinger|nodeinfo) {
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header Host $http_host;
+            proxy_ssl_server_name on;
+            proxy_pass https://ap.ghost.org;
+        }
+
+        # Keep this, but you can set GHOST_INSTANCES_CONF empty later
+        ${GHOST_INSTANCES_CONF}
+
+        location / {
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-NginX-Proxy true;
+
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+
+            proxy_pass ${GHOST_ROOT_URL};
+            proxy_redirect off;
+        }
+    }
+
+    # -----------------------------
+    # PT: blog.awtom.com.br
+    # -----------------------------
+    server {
+        listen ${PORT};
+        server_name blog.awtom.com.br;
+
+        port_in_redirect off;
+        absolute_redirect off;
+
+        add_header X-Content-Type-Options $header_content_type_options;
 
         location = /health {
             add_header 'Access-Control-Allow-Origin' '*' always;
@@ -44,10 +109,9 @@ http {
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header Host $http_host;
             proxy_ssl_server_name on;
+            proxy_ssl_server_name on;
             proxy_pass https://ap.ghost.org;
         }
-
-        ${GHOST_INSTANCES_CONF}
 
         location / {
             proxy_set_header X-Real-IP $remote_addr;
@@ -60,7 +124,7 @@ http {
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection 'upgrade';
 
-            proxy_pass ${GHOST_ROOT_URL};
+            proxy_pass ${GHOST_FR_URL};
             proxy_redirect off;
         }
     }
